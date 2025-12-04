@@ -137,6 +137,20 @@
             border-radius: 0.5rem;
             font-size: 1rem;
             transition: all 0.2s ease;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fb923c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.25rem;
+            padding-right: 2.5rem;
+        }
+        
+        select option {
+            background: #404040;
+            color: #f5f5f5;
+            padding: 0.5rem;
         }
 
         input:focus, select:focus {
@@ -611,4 +625,117 @@
                 setTimeout(() => successAlert.classList.add('hidden'), 3000);
             } else {
                 errorAlert.classList.remove('hidden');
-                setTimeout(() => errorAl
+                setTimeout(() => errorAlert.classList.add('hidden'), 2000);
+            }
+        }
+
+        async function fetchHistory() {
+            const loading = document.getElementById('historyLoading');
+            const empty = document.getElementById('historyEmpty');
+            const data = document.getElementById('historyData');
+            
+            loading.classList.remove('hidden');
+            empty.classList.add('hidden');
+            data.innerHTML = '';
+
+            try {
+                const response = await fetch(`${APPS_SCRIPT_URL}?action=getHistory`);
+                const result = await response.json();
+                
+                loading.classList.add('hidden');
+                
+                if (result.status === 'success' && result.data && result.data.length > 0) {
+                    renderHistory(result.data);
+                } else {
+                    empty.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error fetching history:', error);
+                loading.classList.add('hidden');
+                empty.classList.remove('hidden');
+            }
+        }
+
+        function renderHistory(historyData) {
+            const container = document.getElementById('historyData');
+            const weeks = groupByWeek(historyData);
+            
+            Object.entries(weeks).sort((a, b) => new Date(b[0]) - new Date(a[0])).forEach(([weekStart, weekData]) => {
+                const weekEnd = new Date(weekStart);
+                weekEnd.setDate(weekEnd.getDate() + 6);
+                
+                const weekBlock = document.createElement('div');
+                weekBlock.className = 'week-block';
+                weekBlock.innerHTML = `
+                    <h3 class="week-title">Week: ${new Date(weekStart).toLocaleDateString()} - ${weekEnd.toLocaleDateString()}</h3>
+                    <div class="week-content"></div>
+                `;
+                
+                const weekContent = weekBlock.querySelector('.week-content');
+                const dates = groupByDate(weekData);
+                
+                Object.entries(dates).sort((a, b) => new Date(b[0]) - new Date(a[0])).forEach(([date, dayData]) => {
+                    const dayBlock = document.createElement('div');
+                    dayBlock.className = 'day-block';
+                    
+                    const dayTitle = document.createElement('h4');
+                    dayTitle.className = 'day-title';
+                    dayTitle.textContent = new Date(date).toLocaleDateString('en-US', { 
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+                    });
+                    dayBlock.appendChild(dayTitle);
+                    
+                    dayData.forEach(workout => {
+                        const workoutItem = document.createElement('div');
+                        workoutItem.className = 'workout-item';
+                        workoutItem.innerHTML = `
+                            <div class="workout-header">
+                                <div>
+                                    <span class="workout-category">${workout.category}</span>
+                                    <span style="color: #a3a3a3; margin: 0 0.5rem;">•</span>
+                                    <span class="workout-exercise">${workout.exercise}</span>
+                                </div>
+                            </div>
+                            <div class="workout-details">
+                                Set ${workout.setNumber}: ${workout.reps} reps ${workout.weight !== '0' ? `@ ${workout.weight} kg/lbs` : ''}
+                            </div>
+                        `;
+                        dayBlock.appendChild(workoutItem);
+                    });
+                    
+                    weekContent.appendChild(dayBlock);
+                });
+                
+                container.appendChild(weekBlock);
+            });
+        }
+
+        function groupByWeek(data) {
+            const weeks = {};
+            data.forEach(row => {
+                const date = new Date(row.date);
+                const weekStart = new Date(date);
+                weekStart.setDate(date.getDate() - date.getDay());
+                const weekKey = weekStart.toISOString().split('T')[0];
+                
+                if (!weeks[weekKey]) {
+                    weeks[weekKey] = [];
+                }
+                weeks[weekKey].push(row);
+            });
+            return weeks;
+        }
+
+        function groupByDate(weekData) {
+            const dates = {};
+            weekData.forEach(row => {
+                if (!dates[row.date]) {
+                    dates[row.date] = [];
+                }
+                dates[row.date].push(row);
+            });
+            return dates;
+        }
+    </script>
+</body>
+</html>
