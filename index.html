@@ -1,0 +1,368 @@
+import React, { useState, useEffect } from 'react';
+import { Dumbbell, Plus, Trash2, Save, CheckCircle, Calendar, TrendingUp } from 'lucide-react';
+
+const workoutCategories = {
+  'Chest': ['Bench Press', 'Incline Bench Press', 'Decline Bench Press', 'Dumbbell Press', 'Incline Dumbbell Press', 'Chest Fly', 'Cable Fly', 'Push-ups', 'Dips'],
+  'Back': ['Deadlift', 'Bent Over Row', 'T-Bar Row', 'Seated Cable Row', 'Lat Pulldown', 'Pull-ups', 'Chin-ups', 'Face Pulls', 'Shrugs'],
+  'Shoulders': ['Overhead Press', 'Arnold Press', 'Lateral Raise', 'Front Raise', 'Rear Delt Fly', 'Upright Row', 'Face Pulls'],
+  'Biceps': ['Barbell Curl', 'Dumbbell Curl', 'Hammer Curl', 'Preacher Curl', 'Concentration Curl', 'Cable Curl'],
+  'Triceps': ['Tricep Dips', 'Close Grip Bench Press', 'Skull Crushers', 'Overhead Tricep Extension', 'Tricep Pushdown', 'Kickbacks'],
+  'Legs': ['Squat', 'Front Squat', 'Leg Press', 'Lunges', 'Bulgarian Split Squat', 'Leg Extension', 'Leg Curl', 'Calf Raise'],
+  'Core': ['Plank', 'Crunches', 'Russian Twists', 'Leg Raises', 'Mountain Climbers', 'Bicycle Crunches', 'Dead Bug'],
+  'Cardio': ['Running', 'Cycling', 'Swimming', 'Jump Rope', 'Rowing', 'Elliptical', 'Stair Climber']
+};
+
+export default function WorkoutTracker() {
+  const [activeTab, setActiveTab] = useState('log');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedWorkout, setSelectedWorkout] = useState('');
+  const [sets, setSets] = useState([{ reps: '', weight: '' }]);
+  const [savedStatus, setSavedStatus] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [historyData, setHistoryData] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const APPS_SCRIPT_URL = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE';
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetchHistory();
+    }
+  }, [activeTab]);
+
+  const fetchHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const response = await fetch(`${APPS_SCRIPT_URL}?action=getHistory`);
+      const data = await response.json();
+      if (data.status === 'success') {
+        setHistoryData(data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching history:', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const addSet = () => {
+    setSets([...sets, { reps: '', weight: '' }]);
+  };
+
+  const removeSet = (index) => {
+    if (sets.length > 1) {
+      setSets(sets.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateSet = (index, field, value) => {
+    const newSets = [...sets];
+    newSets[index][field] = value;
+    setSets(newSets);
+  };
+
+  const saveWorkout = async () => {
+    if (!selectedCategory || !selectedWorkout || sets.some(s => !s.reps)) {
+      setSavedStatus('error');
+      setTimeout(() => setSavedStatus(''), 2000);
+      return;
+    }
+
+    setIsLoading(true);
+    
+    const data = {
+      date,
+      category: selectedCategory,
+      exercise: selectedWorkout,
+      sets: sets.map((s, i) => ({
+        setNumber: i + 1,
+        reps: s.reps,
+        weight: s.weight || '0'
+      }))
+    };
+
+    try {
+      const response = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      });
+
+      setSavedStatus('success');
+      setSelectedCategory('');
+      setSelectedWorkout('');
+      setSets([{ reps: '', weight: '' }]);
+      setTimeout(() => setSavedStatus(''), 3000);
+    } catch (error) {
+      console.error('Error saving workout:', error);
+      setSavedStatus('error');
+      setTimeout(() => setSavedStatus(''), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const groupByWeek = (data) => {
+    const weeks = {};
+    data.forEach(row => {
+      const date = new Date(row.date);
+      const weekStart = new Date(date);
+      weekStart.setDate(date.getDate() - date.getDay());
+      const weekKey = weekStart.toISOString().split('T')[0];
+      
+      if (!weeks[weekKey]) {
+        weeks[weekKey] = [];
+      }
+      weeks[weekKey].push(row);
+    });
+    return weeks;
+  };
+
+  const groupByDate = (weekData) => {
+    const dates = {};
+    weekData.forEach(row => {
+      if (!dates[row.date]) {
+        dates[row.date] = [];
+      }
+      dates[row.date].push(row);
+    });
+    return dates;
+  };
+
+  return (
+    <div className="min-h-screen bg-neutral-900 p-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-neutral-800 rounded-2xl shadow-2xl border border-neutral-700 overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-neutral-700">
+            <div className="flex items-center gap-3">
+              <Dumbbell className="w-8 h-8 text-orange-500" />
+              <h1 className="text-3xl font-bold text-neutral-100">Workout Tracker</h1>
+            </div>
+          </div>
+
+          <div className="flex border-b border-neutral-700">
+            <button
+              onClick={() => setActiveTab('log')}
+              className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 font-medium transition-colors ${
+                activeTab === 'log'
+                  ? 'bg-orange-900/40 text-orange-400 border-b-2 border-orange-500'
+                  : 'text-neutral-400 hover:text-neutral-300 hover:bg-neutral-700/50'
+              }`}
+            >
+              <Calendar className="w-5 h-5" />
+              Log Workout
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 font-medium transition-colors ${
+                activeTab === 'history'
+                  ? 'bg-orange-900/40 text-orange-400 border-b-2 border-orange-500'
+                  : 'text-neutral-400 hover:text-neutral-300 hover:bg-neutral-700/50'
+              }`}
+            >
+              <TrendingUp className="w-5 h-5" />
+              History
+            </button>
+          </div>
+
+          {activeTab === 'log' ? (
+            <div className="p-6 md:p-8">
+              {savedStatus === 'success' && (
+                <div className="mb-6 p-4 bg-orange-950 border border-orange-800 rounded-lg flex items-center gap-2 text-orange-400">
+                  <CheckCircle className="w-5 h-5" />
+                  <span>Workout saved successfully!</span>
+                </div>
+              )}
+
+              {savedStatus === 'error' && (
+                <div className="mb-6 p-4 bg-red-950 border border-red-800 rounded-lg text-red-400">
+                  Please fill in all required fields (category, exercise and reps)
+                </div>
+              )}
+
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-neutral-300 mb-2">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full px-4 py-2 bg-neutral-700 border border-neutral-600 text-neutral-100 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-neutral-300 mb-2">
+                    Muscle Group
+                  </label>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => {
+                      setSelectedCategory(e.target.value);
+                      setSelectedWorkout('');
+                    }}
+                    className="w-full px-4 py-2 bg-neutral-700 border border-neutral-600 text-neutral-100 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value="">Select muscle group</option>
+                    {Object.keys(workoutCategories).map(category => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedCategory && (
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-300 mb-2">
+                      Exercise
+                    </label>
+                    <select
+                      value={selectedWorkout}
+                      onChange={(e) => setSelectedWorkout(e.target.value)}
+                      className="w-full px-4 py-2 bg-neutral-700 border border-neutral-600 text-neutral-100 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    >
+                      <option value="">Select an exercise</option>
+                      {workoutCategories[selectedCategory].map(exercise => (
+                        <option key={exercise} value={exercise}>
+                          {exercise}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <label className="block text-sm font-medium text-neutral-300">
+                      Sets
+                    </label>
+                    <button
+                      onClick={addSet}
+                      className="flex items-center gap-1 px-3 py-1 bg-orange-900/40 text-orange-400 rounded-lg hover:bg-orange-900/60 transition-colors text-sm border border-orange-800/50"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Set
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {sets.map((set, index) => (
+                      <div key={index} className="flex items-center gap-3 p-3 bg-neutral-700/50 rounded-lg border border-neutral-600">
+                        <span className="text-sm font-medium text-orange-400 w-12">
+                          Set {index + 1}
+                        </span>
+                        <input
+                          type="number"
+                          placeholder="Reps"
+                          value={set.reps}
+                          onChange={(e) => updateSet(index, 'reps', e.target.value)}
+                          className="flex-1 px-3 py-2 bg-neutral-700 border border-neutral-600 text-neutral-100 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-neutral-500"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Weight (kg/lbs)"
+                          value={set.weight}
+                          onChange={(e) => updateSet(index, 'weight', e.target.value)}
+                          className="flex-1 px-3 py-2 bg-neutral-700 border border-neutral-600 text-neutral-100 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-neutral-500"
+                        />
+                        {sets.length > 1 && (
+                          <button
+                            onClick={() => removeSet(index)}
+                            className="p-2 text-red-400 hover:bg-red-950 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={saveWorkout}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-900/30"
+                >
+                  <Save className="w-5 h-5" />
+                  {isLoading ? 'Saving...' : 'Save Workout'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-6 md:p-8">
+              {loadingHistory ? (
+                <div className="text-center py-12 text-neutral-400">
+                  Loading workout history...
+                </div>
+              ) : historyData.length === 0 ? (
+                <div className="text-center py-12 text-neutral-400">
+                  No workout history yet. Start logging your workouts!
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {Object.entries(groupByWeek(historyData)).sort((a, b) => new Date(b[0]) - new Date(a[0])).map(([weekStart, weekData]) => {
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekEnd.getDate() + 6);
+                    
+                    return (
+                      <div key={weekStart} className="bg-neutral-700/30 rounded-lg p-5 border border-neutral-600">
+                        <h3 className="text-lg font-semibold text-orange-400 mb-4">
+                          Week: {new Date(weekStart).toLocaleDateString()} - {weekEnd.toLocaleDateString()}
+                        </h3>
+                        
+                        <div className="space-y-4">
+                          {Object.entries(groupByDate(weekData)).sort((a, b) => new Date(b[0]) - new Date(a[0])).map(([date, dayData]) => (
+                            <div key={date} className="bg-neutral-800 rounded-lg p-4 border border-neutral-600">
+                              <h4 className="text-md font-semibold text-neutral-100 mb-3 pb-2 border-b border-neutral-600">
+                                {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                              </h4>
+                              
+                              <div className="space-y-3">
+                                {dayData.map((workout, idx) => (
+                                  <div key={idx} className="bg-neutral-700/50 rounded p-3">
+                                    <div className="flex justify-between items-start mb-2">
+                                      <div>
+                                        <span className="text-orange-400 font-medium">{workout.category}</span>
+                                        <span className="text-neutral-400 mx-2">•</span>
+                                        <span className="text-neutral-200">{workout.exercise}</span>
+                                      </div>
+                                    </div>
+                                    <div className="text-sm text-neutral-400">
+                                      Set {workout.setNumber}: {workout.reps} reps {workout.weight !== '0' && `@ ${workout.weight} kg/lbs`}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 p-4 bg-neutral-800 border border-neutral-700 rounded-lg shadow text-sm text-neutral-400">
+          <p className="font-medium mb-2 text-neutral-300">Setup Instructions:</p>
+          <ol className="list-decimal list-inside space-y-1">
+            <li>Create a Google Sheet for your workout data</li>
+            <li>Go to Extensions → Apps Script in your Google Sheet</li>
+            <li>Paste the provided Apps Script code</li>
+            <li>Deploy as Web App and copy the URL</li>
+            <li>Replace YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE in the code</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  );
+}
